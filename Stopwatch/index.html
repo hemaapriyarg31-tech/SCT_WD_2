@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Nova Pro Stopwatch</title>
+
+<style>
+:root {
+  --bg: #0f172a;
+  --card: rgba(255,255,255,0.06);
+  --text: #ffffff;
+  --accent: #22c55e;
+}
+
+body.light {
+  --bg: #f1f5f9;
+  --card: white;
+  --text: #0f172a;
+  --accent: #2563eb;
+}
+
+body {
+  margin: 0;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: var(--bg);
+  color: var(--text);
+  font-family: Arial, sans-serif;
+  transition: 0.4s;
+}
+
+.container {
+  width: 360px;
+  padding: 25px;
+  border-radius: 20px;
+  background: var(--card);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 0 25px rgba(0,0,0,0.3);
+  text-align: center;
+}
+
+h1 {
+  letter-spacing: 2px;
+  margin-bottom: 10px;
+}
+
+.time {
+  font-size: 38px;
+  font-weight: bold;
+  margin: 15px 0;
+  text-shadow: 0 0 10px var(--accent);
+}
+
+.buttons button {
+  margin: 5px;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: 0.2s;
+}
+
+button:hover {
+  transform: scale(1.05);
+}
+
+.start { background: var(--accent); color: white; }
+.pause { background: orange; color: white; }
+.reset { background: red; color: white; }
+.lap { background: #3b82f6; color: white; }
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.toggle {
+  cursor: pointer;
+  font-size: 13px;
+  padding: 5px 10px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.1);
+}
+
+.laps {
+  margin-top: 15px;
+  max-height: 180px;
+  overflow-y: auto;
+  text-align: left;
+  border-radius: 10px;
+}
+
+.lap-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.sound-toggle {
+  font-size: 12px;
+  cursor: pointer;
+  margin-top: 8px;
+  opacity: 0.8;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <div class="topbar">
+    <div class="toggle" onclick="toggleTheme()">🌗 Theme</div>
+    <div class="toggle" onclick="clearLaps()">🗑 Clear</div>
+  </div>
+
+  <h1>STOPWATCH PRO</h1>
+
+  <div class="time" id="display">00:00:00.000</div>
+
+  <div class="buttons">
+    <button class="start" onclick="startTimer()">Start</button>
+    <button class="pause" onclick="pauseTimer()">Pause</button>
+    <button class="reset" onclick="resetTimer()">Reset</button>
+    <button class="lap" onclick="recordLap()">Lap</button>
+  </div>
+
+  <div class="sound-toggle" onclick="toggleSound()">
+    🔊 Sound: <span id="soundStatus">ON</span>
+  </div>
+
+  <div class="laps" id="laps"></div>
+</div>
+
+<!-- beep sound -->
+<audio id="beep">
+  <source src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" type="audio/ogg">
+</audio>
+
+<script>
+let startTime = 0;
+let elapsedTime = 0;
+let running = false;
+let interval;
+let lapCount = 0;
+let soundOn = true;
+
+const display = document.getElementById("display");
+const lapsDiv = document.getElementById("laps");
+const beep = document.getElementById("beep");
+
+function format(ms) {
+  let msPart = ms % 1000;
+  let totalSec = Math.floor(ms / 1000);
+  let sec = totalSec % 60;
+  let min = Math.floor(totalSec / 60) % 60;
+  let hr = Math.floor(totalSec / 3600);
+
+  return `${String(hr).padStart(2,'0')}:${String(min).padStart(2,'0')}:${String(sec).padStart(2,'0')}.${String(msPart).padStart(3,'0')}`;
+}
+
+function update() {
+  display.innerText = format(elapsedTime + (running ? Date.now() - startTime : 0));
+}
+
+function startTimer() {
+  if (running) return;
+  running = true;
+  startTime = Date.now() - elapsedTime;
+
+  interval = setInterval(update, 50);
+  playSound();
+}
+
+function pauseTimer() {
+  if (!running) return;
+  running = false;
+  elapsedTime = Date.now() - startTime;
+  clearInterval(interval);
+  playSound();
+}
+
+function resetTimer() {
+  running = false;
+  clearInterval(interval);
+  startTime = 0;
+  elapsedTime = 0;
+  display.innerText = "00:00:00.000";
+  playSound();
+}
+
+function recordLap() {
+  if (!running) return;
+
+  lapCount++;
+  const time = display.innerText;
+
+  const lap = {
+    id: lapCount,
+    time: time
+  };
+
+  saveLap(lap);
+  renderLap(lap);
+  playSound();
+}
+
+function renderLap(lap) {
+  const div = document.createElement("div");
+  div.className = "lap-item";
+  div.innerHTML = `<span>Lap ${lap.id}</span><span>${lap.time}</span>`;
+  lapsDiv.prepend(div);
+}
+
+function saveLap(lap) {
+  let data = JSON.parse(localStorage.getItem("laps") || "[]");
+  data.push(lap);
+  localStorage.setItem("laps", JSON.stringify(data));
+}
+
+function loadLaps() {
+  let data = JSON.parse(localStorage.getItem("laps") || "[]");
+  data.forEach(l => {
+    lapCount = l.id;
+    renderLap(l);
+  });
+}
+
+function clearLaps() {
+  localStorage.removeItem("laps");
+  lapsDiv.innerHTML = "";
+  lapCount = 0;
+  playSound();
+}
+
+function toggleTheme() {
+  document.body.classList.toggle("light");
+}
+
+function toggleSound() {
+  soundOn = !soundOn;
+  document.getElementById("soundStatus").innerText = soundOn ? "ON" : "OFF";
+}
+
+function playSound() {
+  if (soundOn) {
+    beep.currentTime = 0;
+    beep.play();
+  }
+}
+
+loadLaps();
+update();
+</script>
+
+</body>
+</html>
